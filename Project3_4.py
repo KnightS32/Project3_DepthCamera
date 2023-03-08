@@ -147,7 +147,7 @@ try:
         depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
         color_image = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
 
-        blank_image = cv.rectangle(blank_image, (h-5,v//2-5), (h+5,v//2+5), (0, 0, 255), -1)
+        blank_image = cv.rectangle(blank_image, (h-2,v//2-5), (h+2,v//2+5), (0, 0, 255), -1)
 
 
         # If depth and color resolutions are different, resize color image to match depth image for display
