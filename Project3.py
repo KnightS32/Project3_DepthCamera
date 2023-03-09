@@ -9,29 +9,8 @@ import pyrealsense2 as rs
 import numpy as np
 import cv2 as cv
 
-
-
-# Tracker types
-tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-tracker_type = tracker_types[2]
-
 # initialize tracker
-if tracker_type == 'BOOSTING':
-    tracker = cv.TrackerBoosting_create()
-if tracker_type == 'MIL':
-    tracker = cv.TrackerMIL_create()
-if tracker_type == 'KCF':
-    tracker = cv.TrackerKCF_create()
-if tracker_type == 'TLD':
-    tracker = cv.TrackerTLD_create()
-if tracker_type == 'MEDIANFLOW':
-    tracker = cv.TrackerMedianFlow_create()
-if tracker_type == 'GOTURN':
-    tracker = cv.TrackerGOTURN_create()
-if tracker_type == 'MOSSE':
-    tracker = cv.TrackerMOSSE_create()
-if tracker_type == "CSRT":
-    tracker = cv.TrackerCSRT_create()
+tracker = cv.TrackerKCF_create()
 
 # Configure depth and color streams
 pipeline = rs.pipeline()
@@ -64,15 +43,12 @@ else:
 # Start streaming
 profile = pipeline.start(config)
 
+
 # Getting the depth sensor's depth scale (see rs-align example for explanation)
 depth_sensor = profile.get_device().first_depth_sensor()
 depth_scale = depth_sensor.get_depth_scale()
-print("Depth Scale is: " , depth_scale)
+print("Depth Scale is: ", depth_scale)
 
-# We will be removing the background of objects more than
-#  clipping_distance_in_meters meters away
-clipping_distance_in_meters = 1 #1 meter
-clipping_distance = clipping_distance_in_meters / depth_scale
 
 # Create an align object
 # rs.align allows us to perform alignment of depth frames to others frames
@@ -84,7 +60,7 @@ align = rs.align(align_to)
 
 for i in range(30):
     frames = pipeline.wait_for_frames()
-    
+
 color_frame = frames.get_color_frame()
 color_image = np.asanyarray(color_frame.get_data())
 
@@ -94,27 +70,37 @@ bbox = cv.selectROI(color_image, False)
 # Initialize tracker with first frame and bounding box
 ok = tracker.init(color_image, bbox)
 
+def getAvgDepth(bbox):
+    avg = 0
+    area = ((bbox[3] - bbox[1]) * (bbox[2] - bbox[0]))
+    if area > 0:
+        scale = 1 / area
+        for i in range(bbox[0], bbox[2]):
+            for k in range(bbox[1], bbox[3]):
+                avg += depth_image[k, i] * scale
+    print('avg depth: ', avg)
+
 try:
     while True:
 
         # Wait for a coherent pair of frames: depth and color
         frames = pipeline.wait_for_frames()
-        
+
         # Align the depth frame to color frame
         aligned_frames = align.process(frames)
 
         # Get aligned frames
-        aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+        aligned_depth_frame = aligned_frames.get_depth_frame()  # aligned_depth_frame is a 640x480 depth image
         color_frame = aligned_frames.get_color_frame()
-        
+
         if not aligned_depth_frame or not color_frame:
             continue
 
         # Convert images to numpy arrays
         depth_image = np.asanyarray(aligned_depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
-        v,h = depth_image.shape
-        blank_image = np.zeros((v, 2*h, 3), dtype=np.uint8)
+        v, h = depth_image.shape
+        blank_image = np.zeros((v, 2 * h, 3), dtype=np.uint8)
 
         ok, bbox = tracker.update(color_image)
         # Draw bounding box
@@ -122,11 +108,84 @@ try:
             # Tracking success
             p1 = (int(bbox[0]), int(bbox[1]))
             p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
-            cv.rectangle(color_image, p1, p2, (255,0,0), 2, 1)
-        else :
-            # Tracking failure
-            cv.putText(color_image, "Tracking failure detected", (100,80), cv.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
+            cv.rectangle(color_image, p1, p2, (255, 0, 0), 2, 1)
+        else:
 
+            avg = np.float32(color_image)
+            
+            whiteImg = np.ones((480, 640, 3), dtype = np.uint8)
+            whiteImg = 255* whiteImg
+
+    	
+            gray = cv.cvtColor(color_image, cv.COLOR_BGR2GRAY)
+            avg1 = cv.cvtColor(avg, cv.COLOR_BGR2RGB)
+
+            blur = cv.GaussianBlur(gray, ksize=(5, 5), sigmaX=0)
+
+            cv.accumulateWeighted(depth_image, avg,0.1)
+
+            absDiff = cv.convertScaleAbs(avg)
+
+            if (color_image is None):
+              # First frame; there is no previous one yetq
+              color_image = absDiff
+              continue
+
+            # Set previous frame and continue if there is None
+            if (depth_image is None):
+              # First frame; there is no previous one yet
+              color_image = absDiff
+              continue
+
+            # calculate difference and update previous frame
+            diff_frame = cv.absdiff(src1=color_image, src2=absDiff)
+            color_image = absDiff
+
+            # Dilute the image a bit to make differences more seeable; more suitable for contour detection
+            kernel = np.ones((5, 5))
+            diff_frame = cv.dilate(diff_frame, kernel, 1)
+
+            absGray = cv.cvtColor(diff_frame, cv.COLOR_BGR2GRAY)
+
+            
+            # Threshold image to find contours
+            ret, thresh = cv.threshold(absGray,50,255,0)
+
+            threshBlur = cv.GaussianBlur(thresh, ksize=(5, 5), sigmaX=0)
+    
+            ret, finalThresh = cv.threshold(threshBlur,210,255,0)
+            contours, hierarchy = cv.findContours(finalThresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE) 
+
+            with_contours = cv.drawContours(whiteImg,contours,-1,(255,0,0),3)
+
+            for c in contours:
+                rect = cv.boundingRect(c)
+                if rect[2] < 100 or rect[3] < 100:
+                    continue
+
+                x,y,w,h = rect
+                cv.rectangle(depth_image,(x,y),(x+w, y+h),(0,255,0),2)
+        
+
+            # if tracking failed, find new object to track
+			# go through different clipping distances from closest to farthest
+			# remove distant background from area
+			# pass this to find contour thing
+			# if the contour is significant
+			# use bounding box of contour as new bounding box
+			
+			# We will be removing the background of objects more than
+            #  clipping_distance_in_meters meters away
+            clipping_distance_in_meters = 1  # 1 meter
+            clipping_distance = clipping_distance_in_meters / depth_scale
+
+            grey_color = 153
+            depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
+            color_image = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
+            # Tracking failure
+            cv.putText(color_image, "Tracking failure detected", (100, 80), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
+
+        getAvgDepth(bbox)
 
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
         depth_colormap = cv.applyColorMap(cv.convertScaleAbs(depth_image, alpha=0.03), cv.COLORMAP_JET)
@@ -134,14 +193,17 @@ try:
         depth_colormap_dim = depth_colormap.shape
         color_colormap_dim = color_image.shape
 
-        grey_color = 153
-        depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
-        color_image = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
-        cv.rectangle(blank_image, (310,630), (330, 650), (0,0,255), 2, -1)
-        
+        if(((bbox[3] - bbox[1]) * (bbox[2] - bbox[0])>0)):
+            depth = getAvgDepth(bbox) * v//2 + v//2
+            blank_image = cv.rectangle(blank_image, (h-2,v//2-5), (h+2,v//2+5), (0, 0, 255), -1)
+            cv.rectangle(blank_image, (bbox[1], depth), (bbox[3], depth), (255, 0, 0), -1)
+            
+
+
         # If depth and color resolutions are different, resize color image to match depth image for display
         if depth_colormap_dim != color_colormap_dim:
-            resized_color_image = cv.resize(color_image, dsize=(depth_colormap_dim[1], depth_colormap_dim[0]), interpolation=cv.INTER_AREA)
+            resized_color_image = cv.resize(color_image, dsize=(depth_colormap_dim[1], depth_colormap_dim[0]),
+                                            interpolation=cv.INTER_AREA)
             images = np.hstack((resized_color_image, depth_colormap))
             images = np.vstack((images, blank_image))
         else:
