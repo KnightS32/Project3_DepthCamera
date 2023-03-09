@@ -71,9 +71,11 @@ ok = tracker.init(color_image, bbox)
 
 def getAvgDepth(bbox):
     avg = 0
-    scale = 1 / ((bbox[3] - bbox[1]) * (bbox[2] - bbox[0]))
-    for i in range(bbox[0], bbox[2]):
-        for k in range(bbox[1], bbox[3]):
+    area = ((bbox[3] - bbox[1]) * (bbox[2] - bbox[0]))
+    if area > 0:
+        scale = 1 / area
+        for i in range(bbox[0], bbox[2]):
+            for k in range(bbox[1], bbox[3]):
             avg += depth_image[k, i] * scale
 
     print('avg depth: ', avg)
