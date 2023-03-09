@@ -9,27 +9,8 @@ import pyrealsense2 as rs
 import numpy as np
 import cv2 as cv
 
-# Tracker types
-tracker_types = ['BOOSTING', 'MIL', 'KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
-tracker_type = tracker_types[2]
-
 # initialize tracker
-if tracker_type == 'BOOSTING':
-    tracker = cv.TrackerBoosting_create()
-if tracker_type == 'MIL':
-    tracker = cv.TrackerMIL_create()
-if tracker_type == 'KCF':
-    tracker = cv.TrackerKCF_create()
-if tracker_type == 'TLD':
-    tracker = cv.TrackerTLD_create()
-if tracker_type == 'MEDIANFLOW':
-    tracker = cv.TrackerMedianFlow_create()
-if tracker_type == 'GOTURN':
-    tracker = cv.TrackerGOTURN_create()
-if tracker_type == 'MOSSE':
-    tracker = cv.TrackerMOSSE_create()
-if tracker_type == "CSRT":
-    tracker = cv.TrackerCSRT_create()
+tracker = cv.TrackerKCF_create()
 
 # Configure depth and color streams
 pipeline = rs.pipeline()
@@ -67,10 +48,6 @@ depth_sensor = profile.get_device().first_depth_sensor()
 depth_scale = depth_sensor.get_depth_scale()
 print("Depth Scale is: ", depth_scale)
 
-# We will be removing the background of objects more than
-#  clipping_distance_in_meters meters away
-clipping_distance_in_meters = 1  # 1 meter
-clipping_distance = clipping_distance_in_meters / depth_scale
 
 # Create an align object
 # rs.align allows us to perform alignment of depth frames to others frames
@@ -97,7 +74,7 @@ def getAvgDepth(bbox):
     scale = 1 / ((bbox[3] - bbox[1]) * (bbox[2] - bbox[0]))
     for i in range(bbox[0], bbox[2]):
         for k in range(bbox[1], bbox[3]):
-            avg += depth_image[i, k] * scale
+            avg += depth_image[k, i] * scale
 
     print('avg depth: ', avg)
 
@@ -131,9 +108,16 @@ try:
             p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
             cv.rectangle(color_image, p1, p2, (255, 0, 0), 2, 1)
         else:
+			# We will be removing the background of objects more than
+            #  clipping_distance_in_meters meters away
+            clipping_distance_in_meters = 1  # 1 meter
+            clipping_distance = clipping_distance_in_meters / depth_scale
+
+            grey_color = 153
+            depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
+            color_image = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
             # Tracking failure
-            cv.putText(color_image, "Tracking failure detected", (100, 80), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255),
-                       2)
+            cv.putText(color_image, "Tracking failure detected", (100, 80), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
 
         getAvgDepth(bbox)
 
@@ -143,9 +127,6 @@ try:
         depth_colormap_dim = depth_colormap.shape
         color_colormap_dim = color_image.shape
 
-        grey_color = 153
-        depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
-        color_image = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
 
         blank_image = cv.rectangle(blank_image, (h-2,v//2-5), (h+2,v//2+5), (0, 0, 255), -1)
 
