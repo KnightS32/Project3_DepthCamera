@@ -43,6 +43,7 @@ else:
 # Start streaming
 profile = pipeline.start(config)
 
+
 # Getting the depth sensor's depth scale (see rs-align example for explanation)
 depth_sensor = profile.get_device().first_depth_sensor()
 depth_scale = depth_sensor.get_depth_scale()
@@ -76,8 +77,7 @@ def getAvgDepth(bbox):
         scale = 1 / area
         for i in range(bbox[0], bbox[2]):
             for k in range(bbox[1], bbox[3]):
-            avg += depth_image[k, i] * scale
-
+                avg += depth_image[k, i] * scale
     print('avg depth: ', avg)
 
 try:
@@ -110,6 +110,13 @@ try:
             p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
             cv.rectangle(color_image, p1, p2, (255, 0, 0), 2, 1)
         else:
+            # if tracking failed, find new object to track
+			# go through different clipping distances from closest to farthest
+			# remove distant background from area
+			# pass this to find contour thing
+			# if the contour is significant
+			# use bounding box of contour as new bounding box
+			
 			# We will be removing the background of objects more than
             #  clipping_distance_in_meters meters away
             clipping_distance_in_meters = 1  # 1 meter
