@@ -2,7 +2,10 @@
 ## Copyright(c) 2015-2017 Intel Corporation. All Rights Reserved.
 
 ###############################################
-##      Open CV and Numpy integration        ##
+##                Group Nine:                ##
+##              Grant Kirkland               ##
+##               Knight Scott                ##
+##             Cheyenne Sterbick             ##
 ###############################################
 
 import pyrealsense2 as rs
@@ -21,8 +24,6 @@ pipeline_wrapper = rs.pipeline_wrapper(pipeline)
 pipeline_profile = config.resolve(pipeline_wrapper)
 device = pipeline_profile.get_device()
 device_product_line = str(device.get_info(rs.camera_info.product_line))
-
-clipping_distance = 1 / device.first_depth_sensor().get_depth_scale()
 
 found_rgb = False
 for s in device.sensors:
@@ -70,16 +71,6 @@ print("bbox", type(bbox), bbox)
 # Initialize tracker with first frame and bounding box
 ok = tracker.init(color_image, bbox)
 
-def getAvgDepth(bbox):
-    avg = 0
-    area = ((bbox[3] - bbox[1]) * (bbox[2] - bbox[0]))
-    if area > 0:
-        scale = 1 / area
-        for i in range(bbox[0], bbox[2]):
-            for k in range(bbox[1], bbox[3]):
-                avg += depth_image[k, i] * scale
-    print('avg depth: ', avg)
-
 try:
     while True:
 
@@ -112,43 +103,35 @@ try:
             # if tracking failed, find new object to track
 			# go through different clipping distances from closest to farthest
             for i in range(1, 5):
+                # Step in 0.5 m increments
                 clipping_distance = i * 0.5 / depth_scale
                 grey_color = 153
+                # Make 3 channel depth_image
                 depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
-                # remove distant background from area
+                # Remove distant background from area
                 color_image_copy = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
+                # Convert to Greyscale
                 gray_img = cv.cvtColor(color_image_copy, cv.COLOR_BGR2GRAY)
+                # Threshold image
                 ret, thresh = cv.threshold(gray_img, 127, 255, 0)
+                # Find contours from thresholded image
                 contours, _ = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-                
-                finalCnt = None
-                maxCnt = 1000
+                # Define variables to check vs.
+                finalCnt = None # used to check if a contour was found
+                maxCnt = 1000   # Threshold value for contour area
+                # For every contour see if it is larger than the threshold
                 for eachContour in contours:
                     if cv.contourArea(eachContour) > maxCnt:
-                        maxCnt = cv.contourArea(eachContour)
+                        #maxCnt = cv.contourArea(eachContour)
                         finalCnt = eachContour
+                # If finalContour is defined, then create a bounding rectangle and if the rectangle is not the whole screen initalize a new tracker
                 if (type(finalCnt) != None):
                     rect = cv.boundingRect(finalCnt)
                     if (rect[2] != color_image.shape[1]):
                         print("rect", type(rect), rect)
                         tracker = cv.TrackerKCF_create()
                         ok = tracker.init(color_image, rect)
-                        print("B", ok)
                         break
-                    
-
-                #todo~~~ check if contour is significant enough
-                
-
-                #ok = tracker.init(color_image, cv.boundingRect(cnt))
-                #color_copy = cv.rectangle(color_copy,(x,y),(x+w, y+h),(0,255,0),2)
-			# pass this to find contour thing
-			# if the contour is significant
-			# use bounding box of contour as new bounding box
-			
-			# We will be removing the background of objects more than
-            #  clipping_distance_in_meters meters away
-
 
             # Tracking failure
             cv.putText(color_image, "Tracking failure detected", (100, 80), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
@@ -161,9 +144,11 @@ try:
         depth_colormap_dim = depth_colormap.shape
         color_colormap_dim = color_image.shape
         
+        # Make blank image equal to the size of both wide
         blank_image = cv.rectangle(blank_image, (h-2,v//2-5), (h+2,v//2+5), (0, 0, 255), -1)
 
-        if(abs((bbox[3] - bbox[1]) * (bbox[2] - bbox[0]))>0):
+        # if bounding box is non-zero area
+        if(abs((bbox[3] - bbox[1]) * (bbox[2] - bbox[0])) > 0):
             # center point of bounding box
             xC = bbox[3] - (bbox[3]//2 - bbox[1])
             yC = bbox[2] - (bbox[2]//2 - bbox[0])
@@ -173,10 +158,10 @@ try:
             depth = int (blank_image.shape[0]//2 - blank_image.shape[0]//2 * depth)
             # get scale of blank image width to color image width
             wscale = (blank_image.shape[1] / color_image.shape[1])
-            # make points for blank image
-            p1 = ((int) (bbox[0] * wscale), depth)
-            p2 = ((int) ((bbox[0] + bbox[2]) * wscale), depth)
-            # do a thing
+            # make points for blank image. quartering gets an area that is centered on the origin 
+            p1 = ((int) (blank_image.shape[1] // 4 + bbox[0]), depth)
+            p2 = ((int) (blank_image.shape[1] // 4 + bbox[0] + bbox[2]), depth)
+            # do the thing
             cv.rectangle(blank_image, p1, p2, (0, 255, 0), -1)
 
         # If depth and color resolutions are different, resize color image to match depth image for display
