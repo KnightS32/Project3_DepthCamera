@@ -66,7 +66,7 @@ color_image = np.asanyarray(color_frame.get_data())
 
 # Uncomment the line below to select a different bounding box
 bbox = cv.selectROI(color_image, False)
-
+print("bbox", type(bbox), bbox)
 # Initialize tracker with first frame and bounding box
 ok = tracker.init(color_image, bbox)
 
@@ -101,7 +101,6 @@ try:
         color_image = np.asanyarray(color_frame.get_data())
         v, h = depth_image.shape
         blank_image = np.zeros((v, 2 * h, 3), dtype=np.uint8)
-
         ok, bbox = tracker.update(color_image)
         # Draw bounding box
         if ok:
@@ -110,22 +109,6 @@ try:
             p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
             cv.rectangle(color_image, p1, p2, (255, 0, 0), 2, 1)
         else:
-
- 
-            #color_copy = color_image.copy()
-            #gray_img = cv.cvtColor(color_copy, cv.COLOR_BGR2GRAY)
-
-            #ret, thresh = cv.threshold(gray, 127, 255, 0)
-
-            #contours, _ = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-
-            #cnt = contours[0]
-            
-            #x,y,w,h = cv.boundingRect(cnt)
-
-            #color_copy = cv.rectangle(color_copy,(x,y),(x+w, y+h),(0,255,0),2) 
-        
-
             # if tracking failed, find new object to track
 			# go through different clipping distances from closest to farthest
             for i in range(1, 5):
@@ -137,9 +120,27 @@ try:
                 gray_img = cv.cvtColor(color_image_copy, cv.COLOR_BGR2GRAY)
                 ret, thresh = cv.threshold(gray_img, 127, 255, 0)
                 contours, _ = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-                cnt = contours[0]
-                #x,y,w,h = cv.boundingRect(cnt)
-                ok = tracker.init(color_image, cv.boundingRect(cnt))
+                
+                finalCnt = None
+                maxCnt = 1000
+                for eachContour in contours:
+                    if cv.contourArea(eachContour) > maxCnt:
+                        maxCnt = cv.contourArea(eachContour)
+                        finalCnt = eachContour
+                if (type(finalCnt) != None):
+                    rect = cv.boundingRect(finalCnt)
+                    if (rect[2] != color_image.shape[1]):
+                        print("rect", type(rect), rect)
+                        tracker = cv.TrackerKCF_create()
+                        ok = tracker.init(color_image, rect)
+                        print("B", ok)
+                        break
+                    
+
+                #todo~~~ check if contour is significant enough
+                
+
+                #ok = tracker.init(color_image, cv.boundingRect(cnt))
                 #color_copy = cv.rectangle(color_copy,(x,y),(x+w, y+h),(0,255,0),2)
 			# pass this to find contour thing
 			# if the contour is significant
