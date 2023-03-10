@@ -111,60 +111,19 @@ try:
             cv.rectangle(color_image, p1, p2, (255, 0, 0), 2, 1)
         else:
 
-            avg = np.float32(color_image)
+ 
+            #color_copy = color_image.copy()
+            #gray_img = cv.cvtColor(color_copy, cv.COLOR_BGR2GRAY)
+
+            #ret, thresh = cv.threshold(gray, 127, 255, 0)
+
+            #contours, _ = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+            #cnt = contours[0]
             
-            whiteImg = np.ones((480, 640, 3), dtype = np.uint8)
-            whiteImg = 255* whiteImg
+            #x,y,w,h = cv.boundingRect(cnt)
 
-    	
-            gray = cv.cvtColor(color_image, cv.COLOR_BGR2GRAY)
-            avg1 = cv.cvtColor(avg, cv.COLOR_BGR2RGB)
-
-            blur = cv.GaussianBlur(gray, ksize=(5, 5), sigmaX=0)
-
-            cv.accumulateWeighted(color_image, avg,0.1)
-
-            absDiff = cv.convertScaleAbs(avg)
-
-            if (color_image is None):
-              # First frame; there is no previous one yetq
-              color_image = absDiff
-              continue
-
-            # Set previous frame and continue if there is None
-            if (color_image is None):
-              # First frame; there is no previous one yet
-              color_image = absDiff
-              continue
-
-            # calculate difference and update previous frame
-            diff_frame = cv.absdiff(src1=color_image, src2=absDiff)
-            color_image = absDiff
-
-            # Dilute the image a bit to make differences more seeable; more suitable for contour detection
-            kernel = np.ones((5, 5))
-            diff_frame = cv.dilate(diff_frame, kernel, 1)
-
-            absGray = cv.cvtColor(diff_frame, cv.COLOR_BGR2GRAY)
-
-            
-            # Threshold image to find contours
-            ret, thresh = cv.threshold(absGray,50,255,0)
-
-            threshBlur = cv.GaussianBlur(thresh, ksize=(5, 5), sigmaX=0)
-    
-            ret, finalThresh = cv.threshold(threshBlur,210,255,0)
-            contours, hierarchy = cv.findContours(finalThresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE) 
-
-            with_contours = cv.drawContours(whiteImg,contours,-1,(255,0,0),3)
-
-            for c in contours:
-                rect = cv.boundingRect(c)
-                if rect[2] < 100 or rect[3] < 100:
-                    continue
-
-                x,y,w,h = rect
-                cv.rectangle(depth_image,(x,y),(x+w, y+h),(0,255,0),2)
+            #color_copy = cv.rectangle(color_copy,(x,y),(x+w, y+h),(0,255,0),2) 
         
 
             # if tracking failed, find new object to track
@@ -175,6 +134,13 @@ try:
                 depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
                 # remove distant background from area
                 color_image_copy = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
+                gray_img = cv.cvtColor(color_image_copy, cv.COLOR_BGR2GRAY)
+                ret, thresh = cv.threshold(gray_img, 127, 255, 0)
+                contours, _ = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+                cnt = contours[0]
+                #x,y,w,h = cv.boundingRect(cnt)
+                ok = tracker.init(color_image, cv.boundingRect(cnt))
+                #color_copy = cv.rectangle(color_copy,(x,y),(x+w, y+h),(0,255,0),2)
 			# pass this to find contour thing
 			# if the contour is significant
 			# use bounding box of contour as new bounding box
