@@ -169,6 +169,11 @@ try:
 
             # if tracking failed, find new object to track
 			# go through different clipping distances from closest to farthest
+            for i in range(1, 5):
+                clipping_distance = i * 0.5 / depth_scale
+                grey_color = 153
+                depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
+                color_image_copy = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
 			# remove distant background from area
 			# pass this to find contour thing
 			# if the contour is significant
@@ -176,16 +181,12 @@ try:
 			
 			# We will be removing the background of objects more than
             #  clipping_distance_in_meters meters away
-            clipping_distance_in_meters = 1  # 1 meter
-            clipping_distance = clipping_distance_in_meters / depth_scale
 
-            grey_color = 153
-            depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
-            color_image = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, color_image)
+
             # Tracking failure
             cv.putText(color_image, "Tracking failure detected", (100, 80), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
 
-        getAvgDepth(bbox)
+        # getAvgDepth(bbox)
 
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
         depth_colormap = cv.applyColorMap(cv.convertScaleAbs(depth_image, alpha=0.03), cv.COLORMAP_JET)
@@ -195,15 +196,21 @@ try:
         
         blank_image = cv.rectangle(blank_image, (h-2,v//2-5), (h+2,v//2+5), (0, 0, 255), -1)
 
-         
-        if(((bbox[3] - bbox[1]) * (bbox[2] - bbox[0])>0)):
-            xC = bbox[3] - (bbox[3] - bbox[1]) // 2
-            yC = bbox[2] - (bbox[2] - bbox[0]) // 2
+        if(abs((bbox[3] - bbox[1]) * (bbox[2] - bbox[0]))>0):
+            # center point of bounding box
+            xC = bbox[3] - (bbox[3]//2 - bbox[1])
+            yC = bbox[2] - (bbox[2]//2 - bbox[0])
+            # get depth, scaled off maximum -- need to adjust to be a better scaling factor as the maximum is quite high
             depth = depth_image[xC, yC] / np.amax(depth_image)
-            depth = int (v//2 - v//2 * depth)
-            print(depth_image[xC, yC])
-            print(np.amax(depth_image))
-            cv.rectangle(blank_image, (depth, bbox[1]), (depth, bbox[3]), (0, 255, 0), -1)
+            # convert to y coordinate
+            depth = int (blank_image.shape[0]//2 - blank_image.shape[0]//2 * depth)
+            # get scale of blank image width to color image width
+            wscale = (blank_image.shape[1] / color_image.shape[1])
+            # make points for blank image
+            p1 = ((int) (bbox[0] * wscale), depth)
+            p2 = ((int) ((bbox[0] + bbox[2]) * wscale), depth)
+            # do a thing
+            cv.rectangle(blank_image, p1, p2, (0, 255, 0), -1)
 
         
             
